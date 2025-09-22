@@ -67,6 +67,30 @@ public class StripeWebhookController : ControllerBase
                         await HandleSubscriptionDeleted(subscription);
                     }
                     break;
+
+                case "product.created":
+                    var product = stripeEvent.Data.Object as Stripe.Product;
+                    if (product != null)
+                    {
+                        await HandleProductCreated(product);
+                    }
+                    break;
+
+                case "product.deleted":
+                    var deletedProduct = stripeEvent.Data.Object as Stripe.Product;
+                    if (deletedProduct != null)
+                    {
+                        await HandleProductDeleted(deletedProduct);
+                    }
+                    break;
+
+                case "product.updated":
+                    var updatedProduct = stripeEvent.Data.Object as Stripe.Product;
+                    if (updatedProduct != null)
+                    {
+                        await HandleProductUpdated(updatedProduct);
+                    }
+                    break;
             }
 
             return Ok();
@@ -281,6 +305,343 @@ public class StripeWebhookController : ControllerBase
         catch (Exception ex)
         {
             _logger.LogError(ex, $"Erro ao remover assinatura {subscription.Id} do banco de dados.");
+        }
+    }
+
+    private async Task HandleProductCreated(Stripe.Product product)
+    {
+        _logger.LogInformation($"Novo produto criado no Stripe: {product.Name} (ID: {product.Id})");
+        
+        try
+        {
+            // Buscar todos os planos ativos
+            var activePlans = await GetActivePlans();
+            
+            // Enviar mensagem no chat Discord
+            await SendActivePlansToDiscord(activePlans, product, "created");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Erro ao processar criação do produto {product.Id}: {ex.Message}");
+        }
+    }
+
+    private async Task HandleProductDeleted(Stripe.Product product)
+    {
+        _logger.LogInformation($"Produto deletado no Stripe: {product.Name} (ID: {product.Id})");
+        
+        try
+        {
+            // Buscar todos os planos ativos
+            var activePlans = await GetActivePlans();
+            
+            // Enviar mensagem no chat Discord
+            await SendActivePlansToDiscord(activePlans, product, "deleted");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Erro ao processar exclusão do produto {product.Id}: {ex.Message}");
+        }
+    }
+
+    private async Task HandleProductUpdated(Stripe.Product product)
+    {
+        _logger.LogInformation($"Produto atualizado no Stripe: {product.Name} (ID: {product.Id}) - Ativo: {product.Active}");
+        
+        try
+        {
+            // Verificar se o produto foi arquivado (active = false)
+            if (!product.Active)
+            {
+                _logger.LogInformation($"Produto arquivado detectado: {product.Name} (ID: {product.Id})");
+                
+                // Buscar todos os planos ativos
+                var activePlans = await GetActivePlans();
+                
+                // Enviar mensagem no chat Discord
+                await SendActivePlansToDiscord(activePlans, product, "archived");
+            }
+            else
+            {
+                _logger.LogInformation($"Produto reativado: {product.Name} (ID: {product.Id})");
+                
+                // Opcional: também podemos notificar quando um produto é reativado
+                var activePlans = await GetActivePlans();
+                await SendActivePlansToDiscord(activePlans, product, "reactivated");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Erro ao processar atualização do produto {product.Id}: {ex.Message}");
+        }
+    }
+
+    private async Task<List<Stripe.Price>> GetActivePlans()
+    {
+        var priceService = new Stripe.PriceService();
+        var options = new Stripe.PriceListOptions
+        {
+            Active = true,
+            Limit = 100 // Ajuste conforme necessário
+        };
+        
+        var prices = await priceService.ListAsync(options);
+        return prices.Data.ToList();
+    }
+
+    private async Task SendActivePlansToDiscord(List<Stripe.Price> activePlans, Stripe.Product product, string eventType)
+    {
+        try
+        {
+            var channelIdStr = "1407393107011436677";
+            if (!ulong.TryParse(channelIdStr, out var channelId))
+            {
+                _logger.LogError("ID do canal Discord inválido");
+                return;
+            }
+
+            var guildIdStr = _configuration["DiscordGuildId"];
+            if (string.IsNullOrEmpty(guildIdStr) || !ulong.TryParse(guildIdStr, out var guildId))
+            {
+                _logger.LogError("DiscordGuildId não configurado ou inválido");
+                return;
+            }
+
+            // Verificar se o bot está conectado
+            if (_botService.Client?.ConnectionState != ConnectionState.Connected)
+            {
+                _logger.LogWarning("Bot do Discord não está conectado. Tentando reconectar...");
+                return;
+            }
+
+            var guild = _botService.Client.GetGuild(guildId);
+            if (guild == null)
+            {
+                _logger.LogError($"Servidor Discord não encontrado com ID: {guildId}");
+                return;
+            }
+
+            var channel = guild.GetChannel(channelId) as IMessageChannel;
+            if (channel == null)
+            {
+                _logger.LogError($"Canal Discord não encontrado com ID: {channelId}");
+                return;
+            }
+
+            // Configurar embed baseado no tipo de evento
+            string title;
+            Color color;
+            
+            switch (eventType)
+            {
+                case "created":
+                    title = "🆕 Novo Produto Criado no Stripe!";
+                    color = Color.Green;
+                    break;
+                case "deleted":
+                    title = "🗑️ Produto Deletado no Stripe!";
+                    color = Color.Red;
+                    break;
+                case "archived":
+                    title = "📦 Produto Arquivado no Stripe!";
+                    color = Color.Orange;
+                    break;
+                case "reactivated":
+                    title = "♻️ Produto Reativado no Stripe!";
+                    color = Color.Blue;
+                    break;
+                default:
+                    title = "📝 Produto Atualizado no Stripe!";
+                    color = Color.Gold;
+                    break;
+            }
+            
+            var embed = new EmbedBuilder()
+                .WithTitle(title)
+                .WithDescription($"**Produto:** {product.Name}\n**ID:** `{product.Id}`")
+                .WithColor(color)
+                .WithTimestamp(DateTimeOffset.Now);
+
+            if (activePlans.Any())
+            {
+                var plansDescription = new System.Text.StringBuilder();
+                plansDescription.AppendLine("📋 **Planos Ativos Atualmente:**\n");
+
+                foreach (var plan in activePlans.Take(10)) // Limitar a 10 planos para não sobrecarregar
+                {
+                    var unitAmount = plan.UnitAmount ?? 0;
+                    var currency = plan.Currency?.ToUpper() ?? "USD";
+                    var amountFormatted = unitAmount > 0 ? $"R$ {unitAmount / 100.0:F2}" : "Gratuito";
+                    
+                    var interval = plan.Recurring?.Interval ?? "único";
+                    var intervalCount = plan.Recurring?.IntervalCount ?? 1;
+                    
+                    var intervalText = intervalCount > 1 ? $"a cada {intervalCount} {interval}s" : $"por {interval}";
+                    
+                    // Buscar nome do PlanMapping se existir
+                    var planMappingName = GetPlanMappingName(plan.Id);
+                    var displayName = !string.IsNullOrEmpty(planMappingName) ? planMappingName : (plan.Nickname ?? "Sem nome");
+                    
+                    plansDescription.AppendLine($"• **{displayName}**");
+                    plansDescription.AppendLine($"  💰 {amountFormatted} {currency} / {intervalText}");
+                    plansDescription.AppendLine($"  🆔 `{plan.Id}`\n");
+                }
+
+                if (activePlans.Count > 10)
+                {
+                    plansDescription.AppendLine($"... e mais {activePlans.Count - 10} planos ativos.");
+                }
+
+                embed.AddField("📊 Planos Ativos", plansDescription.ToString(), false);
+            }
+            else
+            {
+                embed.AddField("📊 Planos Ativos", "Nenhum plano ativo encontrado.", false);
+            }
+
+            await channel.SendMessageAsync(embed: embed.Build());
+            _logger.LogInformation($"Mensagem enviada com sucesso no canal {channelId} sobre o produto {product.Id} ({eventType})");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Erro ao enviar mensagem no Discord: {ex.Message}");
+        }
+    }
+
+    private string GetPlanMappingName(string priceId)
+    {
+        var planMappingSection = _configuration.GetSection("PlanMapping");
+        return planMappingSection.GetChildren()
+            .FirstOrDefault(x => x.Value == priceId)?.Key ?? string.Empty;
+    }
+
+    [HttpGet("test-product-created")]
+    public async Task<IActionResult> TestProductCreated()
+    {
+        try
+        {
+            // Criar um produto fictício para teste
+            var testProduct = new Stripe.Product
+            {
+                Id = "test_product_" + DateTimeOffset.Now.ToUnixTimeSeconds(),
+                Name = "Produto de Teste - " + DateTime.Now.ToString("HH:mm:ss")
+            };
+
+            _logger.LogInformation("Executando teste do webhook product.created...");
+            await HandleProductCreated(testProduct);
+
+            return Ok(new { message = "Teste executado com sucesso! Verifique o canal Discord." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro ao executar teste do webhook product.created");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("test-plans-only")]
+    public async Task<IActionResult> TestPlansOnly()
+    {
+        try
+        {
+            var activePlans = await GetActivePlans();
+            
+            var plansInfo = activePlans.Select(plan => new
+            {
+                id = plan.Id,
+                nickname = plan.Nickname ?? "Sem nome",
+                planMappingName = GetPlanMappingName(plan.Id),
+                displayName = !string.IsNullOrEmpty(GetPlanMappingName(plan.Id)) ? GetPlanMappingName(plan.Id) : (plan.Nickname ?? "Sem nome"),
+                amount = plan.UnitAmount ?? 0,
+                currency = plan.Currency,
+                interval = plan.Recurring?.Interval ?? "único",
+                intervalCount = plan.Recurring?.IntervalCount ?? 1
+            }).ToList();
+
+            return Ok(new { 
+                message = "Planos ativos encontrados!",
+                totalPlans = activePlans.Count,
+                plans = plansInfo
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro ao buscar planos ativos");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("test-product-deleted")]
+    public async Task<IActionResult> TestProductDeleted()
+    {
+        try
+        {
+            // Criar um produto fictício para teste
+            var testProduct = new Stripe.Product
+            {
+                Id = "test_deleted_product_" + DateTimeOffset.Now.ToUnixTimeSeconds(),
+                Name = "Produto Deletado - " + DateTime.Now.ToString("HH:mm:ss")
+            };
+
+            _logger.LogInformation("Executando teste do webhook product.deleted...");
+            await HandleProductDeleted(testProduct);
+
+            return Ok(new { message = "Teste de exclusão executado com sucesso! Verifique o canal Discord." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro ao executar teste do webhook product.deleted");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("test-product-archived")]
+    public async Task<IActionResult> TestProductArchived()
+    {
+        try
+        {
+            // Criar um produto fictício arquivado para teste
+            var testProduct = new Stripe.Product
+            {
+                Id = "test_archived_product_" + DateTimeOffset.Now.ToUnixTimeSeconds(),
+                Name = "Produto Arquivado - " + DateTime.Now.ToString("HH:mm:ss"),
+                Active = false // Simular produto arquivado
+            };
+
+            _logger.LogInformation("Executando teste do webhook product.updated (archived)...");
+            await HandleProductUpdated(testProduct);
+
+            return Ok(new { message = "Teste de arquivamento executado com sucesso! Verifique o canal Discord." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro ao executar teste do webhook product.updated (archived)");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
+
+    [HttpGet("test-product-reactivated")]
+    public async Task<IActionResult> TestProductReactivated()
+    {
+        try
+        {
+            // Criar um produto fictício reativado para teste
+            var testProduct = new Stripe.Product
+            {
+                Id = "test_reactivated_product_" + DateTimeOffset.Now.ToUnixTimeSeconds(),
+                Name = "Produto Reativado - " + DateTime.Now.ToString("HH:mm:ss"),
+                Active = true // Simular produto reativado
+            };
+
+            _logger.LogInformation("Executando teste do webhook product.updated (reactivated)...");
+            await HandleProductUpdated(testProduct);
+
+            return Ok(new { message = "Teste de reativação executado com sucesso! Verifique o canal Discord." });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro ao executar teste do webhook product.updated (reactivated)");
+            return StatusCode(500, new { error = ex.Message });
         }
     }
     
