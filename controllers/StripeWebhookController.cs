@@ -959,38 +959,38 @@ public class StripeWebhookController : ControllerBase
         }
     }
 
-    // [HttpGet("test-product-created")]
-    // public async Task<IActionResult> TestProductCreated()
-    // {
-    //     try
-    //     {
-    //         // Criar um produto fictício para teste com metadados
-    //         var testProduct = new Stripe.Product
-    //         {
-    //             Id = "test_product_" + DateTimeOffset.Now.ToUnixTimeSeconds(),
-    //             Name = "Produto de Teste - " + DateTime.Now.ToString("HH:mm:ss"),
-    //             Description = "Este é um produto de teste criado para verificar o funcionamento do webhook com metadados e preço.",
-    //             Url = "https://example.com/produto-teste",
-    //             DefaultPriceId = "price_test_123", // Simular um preço padrão
-    //             Metadata = new Dictionary<string, string>
-    //             {
-    //                 { "Horario", "19h30" },
-    //                 { "Vagas", "5" },
-    //                 { "Duracao", "4 horas" }
-    //             }
-    //         };
+    [HttpGet("test-product-created")]
+    public async Task<IActionResult> TestProductCreated()
+    {
+        try
+        {
+            // Criar um produto fictício para teste com metadados
+            var testProduct = new Stripe.Product
+            {
+                Id = "test_product_" + DateTimeOffset.Now.ToUnixTimeSeconds(),
+                Name = "Produto de Teste - " + DateTime.Now.ToString("HH:mm:ss"),
+                Description = "Este é um produto de teste criado para verificar o funcionamento do webhook com metadados e preço.",
+                Url = "https://example.com/produto-teste",
+                DefaultPriceId = "price_test_123", // Simular um preço padrão
+                Metadata = new Dictionary<string, string>
+                {
+                    { "Horario", "19h30" },
+                    { "Vagas", "5" },
+                    { "Duracao", "4 horas" }
+                }
+            };
 
-    //         _logger.LogInformation("Executando teste do webhook product.created...");
-    //         await HandleProductCreated(testProduct);
+            _logger.LogInformation("Executando teste do webhook product.created...");
+            await HandleProductCreated(testProduct);
 
-    //         return Ok(new { message = "Teste executado com sucesso!" });
-    //     }
-    //     catch (Exception ex)
-    //     {
-    //         _logger.LogError(ex, "Erro ao executar teste do webhook product.created");
-    //         return StatusCode(500, new { error = ex.Message });
-    //     }
-    // }
+            return Ok(new { message = "Teste executado com sucesso!" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro ao executar teste do webhook product.created");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
 
     [HttpGet("test-plans-only")]
     public async Task<IActionResult> TestPlansOnly()
@@ -1024,79 +1024,79 @@ public class StripeWebhookController : ControllerBase
         }
     }
 
-    // [HttpGet("test-product-deleted")]
-    // public async Task<IActionResult> TestProductDeleted()
-    // {
-    //     try
-    //     {
-    //         // Criar um produto fictício para teste
-    //         var testProduct = new Stripe.Product
-    //         {
-    //             Id = "test_deleted_product_" + DateTimeOffset.Now.ToUnixTimeSeconds(),
-    //             Name = "Produto Deletado - " + DateTime.Now.ToString("HH:mm:ss")
-    //         };
+    [HttpGet("test-product-deleted")]
+    public async Task<IActionResult> TestProductDeleted()
+    {
+        try
+        {
+            // Criar um produto fictício para teste
+            var testProduct = new Stripe.Product
+            {
+                Id = "test_deleted_product_" + DateTimeOffset.Now.ToUnixTimeSeconds(),
+                Name = "Produto Deletado - " + DateTime.Now.ToString("HH:mm:ss")
+            };
 
-    //         _logger.LogInformation("Executando teste do webhook product.deleted...");
-    //         await HandleProductDeleted(testProduct);
+            _logger.LogInformation("Executando teste do webhook product.deleted...");
+            await HandleProductDeleted(testProduct);
 
-    //         return Ok(new { message = "Teste de exclusão executado com sucesso!" });
-    //     }
-    //     catch (Exception ex)
-    //     {
-    //         _logger.LogError(ex, "Erro ao executar teste do webhook product.deleted");
-    //         return StatusCode(500, new { error = ex.Message });
-    //     }
-    // }
+            return Ok(new { message = "Teste de exclusão executado com sucesso!" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro ao executar teste do webhook product.deleted");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
 
-    // [HttpGet("test-product-archived")]
-    // public async Task<IActionResult> TestProductArchived()
-    // {
-    //     try
-    //     {
-    //         // Criar um produto fictício arquivado para teste
-    //         var testProduct = new Stripe.Product
-    //         {
-    //             Id = "test_archived_product_" + DateTimeOffset.Now.ToUnixTimeSeconds(),
-    //             Name = "Produto Arquivado - " + DateTime.Now.ToString("HH:mm:ss"),
-    //             Active = false // Simular produto arquivado
-    //         };
+    [HttpGet("test-product-archived")]
+    public async Task<IActionResult> TestProductArchived()
+    {
+        try
+        {
+            // Criar um produto fictício arquivado para teste
+            var testProduct = new Stripe.Product
+            {
+                Id = "test_archived_product_" + DateTimeOffset.Now.ToUnixTimeSeconds(),
+                Name = "Produto Arquivado - " + DateTime.Now.ToString("HH:mm:ss"),
+                Active = false // Simular produto arquivado
+            };
 
-    //         _logger.LogInformation("Executando teste do webhook product.updated (archived)...");
-    //         await HandleProductUpdated(testProduct);
+            _logger.LogInformation("Executando teste do webhook product.updated (archived)...");
+            await HandleProductUpdated(testProduct);
 
-    //         return Ok(new { message = "Teste de arquivamento executado com sucesso!" });
-    //     }
-    //     catch (Exception ex)
-    //     {
-    //         _logger.LogError(ex, "Erro ao executar teste do webhook product.updated (archived)");
-    //         return StatusCode(500, new { error = ex.Message });
-    //     }
-    // }
+            return Ok(new { message = "Teste de arquivamento executado com sucesso!" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro ao executar teste do webhook product.updated (archived)");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
 
-    // [HttpGet("test-product-reactivated")]
-    // public async Task<IActionResult> TestProductReactivated()
-    // {
-    //     try
-    //     {
-    //         // Criar um produto fictício reativado para teste
-    //         var testProduct = new Stripe.Product
-    //         {
-    //             Id = "test_reactivated_product_" + DateTimeOffset.Now.ToUnixTimeSeconds(),
-    //             Name = "Produto Reativado - " + DateTime.Now.ToString("HH:mm:ss"),
-    //             Active = true // Simular produto reativado
-    //         };
+    [HttpGet("test-product-reactivated")]
+    public async Task<IActionResult> TestProductReactivated()
+    {
+        try
+        {
+            // Criar um produto fictício reativado para teste
+            var testProduct = new Stripe.Product
+            {
+                Id = "test_reactivated_product_" + DateTimeOffset.Now.ToUnixTimeSeconds(),
+                Name = "Produto Reativado - " + DateTime.Now.ToString("HH:mm:ss"),
+                Active = true // Simular produto reativado
+            };
 
-    //         _logger.LogInformation("Executando teste do webhook product.updated (reactivated)...");
-    //         await HandleProductUpdated(testProduct);
+            _logger.LogInformation("Executando teste do webhook product.updated (reactivated)...");
+            await HandleProductUpdated(testProduct);
 
-    //         return Ok(new { message = "Teste de reativação executado com sucesso!" });
-    //     }
-    //     catch (Exception ex)
-    //     {
-    //         _logger.LogError(ex, "Erro ao executar teste do webhook product.updated (reactivated)");
-    //         return StatusCode(500, new { error = ex.Message });
-    //     }
-    // }
+            return Ok(new { message = "Teste de reativação executado com sucesso!" });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Erro ao executar teste do webhook product.updated (reactivated)");
+            return StatusCode(500, new { error = ex.Message });
+        }
+    }
     
     [HttpGet("create-payment-link")]
     public async Task<IActionResult> CreatePaymentLink([FromQuery] string discordId)
